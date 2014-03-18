@@ -1,0 +1,99 @@
+Nume:		 Ditu Alexandru Mihai
+Grupa/Serie: 323 CA
+Tema 4 PC: Aplicatie client pentru interogari DNS
+
+Detalii implementare:
+
+	Mentionez ca tema e facuta pe Ubuntu de 64 de biti.
+
+
+	Detalii conexiune:
+		
+		Am citit de la inceput toate adresele ip din fisierul dns_servers.conf
+	si le-am pastrat intr-un vector de adrese ip numit (sugestiv) (char **) ip.
+		
+		Dupa ce am creat prima parte din mesaj (si anume sectiunile header si
+	question), am trimis mesajul catre serverul dns.
+
+		In cazul in care acesta nu imi raspundea in timp util (si anume in max
+	3 sec), am folosit pentru timeout functia setsockopt. De asemenea daca aveam
+	eroare la send, incercam urmatorul server. Daca nici unul dintre serverele
+	gasite nu raspunde, atunci programul se termina, afisand un mesaj de eroare.
+	Pana acuma nu am patit asta.
+
+		Partea de mai sus a fost partea usoara. Dupa ce am primit raspuns de la
+	server, am inceput sa procesez mesajul (raspunsul).
+
+
+	Detalii creeare header + question:
+
+		Pentru header am avut nevoie doar de urmatoarele campuri:
+		- id (l-am setat la 1992).
+		- rc (recursion desired) = 1
+		- qdcount (nr de intrebari) = 1
+
+		Apoi a trebuit sa transform numele de domeniu primit ca parametru, din 
+	forma cu puncte, in cea cu cifre. De exemplu: 
+								www.google.com -> 3www6google3com0
+
+		In ceea ce priveste question-ul, pentru timp am pus htons(type) iar la
+	qclass 1 (de la IN).
+
+
+	Detalii procesare raspuns (Resource Record)
+
+		Pentru aceasta parte am folosit urmatoarele functii ajutatoare:
+		decompress, writeInfoType, writeRRInfo.
+
+		-- void decmpress (char *m, int offset, char *str, int *len)
+
+		- m = mesajul primit de la serverul DNS
+		- offset = offsetul la care se afla numele de domeniu ce trebuie convertit,
+					eventual si decomprimat
+		- str = numele domeniului dupa conversie/decomprimare
+		- len = nu reprezinta neaparat lungimea lui str, ci reprezinta cati octeti
+				ocupa str in cadrul mesajului. Spre exemplu in cazul in care
+				numele de domeniu e reprezentat de un pointer catra un nume 
+				deja folosit mai sus (cum se intampla in general la qname), atunci
+				len va avea valoarea 2 (acel pointeri ocupa 2 octeti, acesita 
+				incepand cu 11).
+
+		Cum functioneaza:
+			- in linii mari, am iterat prin fiecare octet, pana am ajuns la 0.
+			- in cazul in care era un numar, extrageam apoi atatea caractere
+				cate imi indica numarul respectiv
+			- in cazul in care am gasit un pointer (adica un octet ce incepe cu 11),
+				a trebuit sa aflu offsetul la care trebuie sa sar, pentru a continua
+				citirea numelui.
+
+		-- void writeRRInfo (char *buf, FILE *out)
+
+		- aceasta functie extrage informatiile (din mesajul buf) ce sunt necesare
+			pentru procesarea unui RR: name, ancount, nscount, arcount, offset etc.
+		
+		- tot aceasta functie scrie si in fisier informatiile pe masura ce aceastea
+			sunt descoperite
+
+		- extragerea informatiilor din RDATA ii revin altei functii, deoarce
+			sectiunile Answer, Authority si Additional puteau avea tipuri diferite
+			si necesitau procesari diferite.
+
+
+		In final ultima functie:
+
+		-- int writeInfoType (char *buf, int offset, int type, int count, int rdlen,
+					int rr_size,
+					char *name, char *type_s, char *class, FILE *out)
+
+		- primeste mai multi parametri, necesari procesarii campului RDATA, din
+			orice RR.
+		- pe masura ce extrageam informatiile le si scriam in fisier.
+
+
+	Sper ca am fost suficient de explicit, alte detalii mai pot fi obtinute si din
+comentariile din cod.
+
+	Mentionez ca am facut si fisier makefile cu regula pentru build, ce creeaza
+un executabil my_dns_client.o si o regula de clean. 
+	Am mai inclus in arhiva si fisierul de log pentru toate tipurile de interogari
+pentru google.com.
